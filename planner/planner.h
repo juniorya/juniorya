@@ -1,38 +1,88 @@
-#ifndef PLANNER_PLANNER_H
-#define PLANNER_PLANNER_H
+/**
+ * @file planner.h
+ * @brief Motion planner orchestrating look-ahead and trajectory sampling.
+ */
+
+#ifndef PLANNER_H
+#define PLANNER_H
 
 #include <stdbool.h>
-#include <stdint.h>
-#include "kinematics/delta.h"
-#include "utils/fixed.h"
+#include <stddef.h>
 
-#define PLANNER_QUEUE_LENGTH 128
+#include "planner/lookahead/lookahead.h"
+#include "planner/s_curve/s_curve.h"
+#include "planner/splines/splines.h"
+#include "ml/tinyml_optimizer.h"
+#include "utils/q16.h"
 
-typedef struct {
-    delta_pose_t start;
-    delta_pose_t end;
-    q16_16_t feedrate;
-    q16_16_t entry_velocity;
-    q16_16_t exit_velocity;
-    q16_16_t accel;
-    q16_16_t jerk;
-    uint32_t total_ticks;
-    uint32_t tick_index;
-    bool active;
-} planner_block_t;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct {
-    planner_block_t blocks[PLANNER_QUEUE_LENGTH];
-    uint16_t head;
-    uint16_t tail;
-    delta_pose_t current_pose;
-    uint32_t control_period_us;
-} planner_queue_t;
+/** @brief Planner configuration parameters. */
+typedef struct
+{
+    q16_16 max_velocity;      /**< Maximum feed rate in workspace units/s. */
+    q16_16 max_acceleration;  /**< Maximum acceleration. */
+    q16_16 max_jerk;          /**< Maximum jerk. */
+    size_t queue_length;      /**< Maximum number of segments in queue. */
+} planner_config;
 
-void planner_init(planner_queue_t *planner, uint32_t control_period_us);
-bool planner_is_empty(const planner_queue_t *planner);
-bool planner_push_line(planner_queue_t *planner, const delta_pose_t *target, q16_16_t feedrate, q16_16_t accel, q16_16_t jerk);
-bool planner_step(planner_queue_t *planner, delta_pose_t *pose_out);
-void planner_hold(planner_queue_t *planner);
+/** @brief Planner runtime context. */
+typedef struct
+{
+    planner_config config;         /**< Static configuration. */
+    lookahead_buffer lookahead;    /**< Look-ahead buffer for multi-segment blending. */
+    s_curve_profile current_motion;/**< Current S-curve profile. */
+    spl_plan_t active_spline;      /**< Active spline segment. */
+    bool spline_valid;             /**< Whether a spline is active. */
+    tinyml_network optimizer;      /**< Embedded neural optimiser. */
+    bool optimizer_ready;          /**< True when optimiser weights initialised. */
+    q16_16 optimizer_last_scale;   /**< Last velocity multiplier suggested by ML. */
+} planner_context;
+
+/**
+ * @brief Fill configuration structure with defaults.
+ * @param cfg Planner configuration to populate.
+ */
+void planner_default_config(planner_config *cfg);
+
+/**
+ * @brief Initialise planner runtime.
+ * @param planner Planner instance.
+ * @param cfg Configuration parameters.
+ * @return True on success.
+ */
+bool planner_init(planner_context *planner, const planner_config *cfg);
+
+/**
+ * @brief Queue a spline plan for execution.
+ * @param planner Planner instance.
+ * @param plan Spline plan to enqueue.
+ * @return True when accepted.
+ */
+bool planner_enqueue_spline(planner_context *planner, const spl_plan_t *plan);
+
+/**
+ * @brief Advance planner state machine; called each control period.
+ * @param planner Planner instance.
+ */
+void planner_step(planner_context *planner);
+
+/**
+ * @brief Hold planner output.
+ * @param planner Planner instance.
+ */
+void planner_hold(planner_context *planner);
+
+/**
+ * @brief Shutdown planner and release resources.
+ * @param planner Planner instance.
+ */
+void planner_shutdown(planner_context *planner);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,44 +1,63 @@
-#ifndef CIA402_CIA402_H
-#define CIA402_CIA402_H
+/**
+ * @file cia402.h
+ * @brief CiA-402 state machine and CSP setpoint interface.
+ */
 
-#include <stdint.h>
+#ifndef CIA402_H
+#define CIA402_H
+
 #include <stdbool.h>
-#include "utils/fixed.h"
-#include "ethcat/master.h"
+#include <stddef.h>
 
-typedef enum {
-    CIA402_MODE_CSP = 8,
-    CIA402_MODE_CSV = 9,
-    CIA402_MODE_CST = 10
-} cia402_mode_t;
+#include "utils/q16.h"
 
-typedef enum {
-    CIA402_STATE_NOT_READY = 0,
-    CIA402_STATE_SWITCH_ON_DISABLED,
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief CiA-402 state enumeration. */
+typedef enum
+{
+    CIA402_STATE_SWITCH_ON_DISABLED = 0,
     CIA402_STATE_READY_TO_SWITCH_ON,
     CIA402_STATE_SWITCHED_ON,
     CIA402_STATE_OPERATION_ENABLED,
-    CIA402_STATE_QUICK_STOP_ACTIVE,
-    CIA402_STATE_FAULT_REACTION,
+    CIA402_STATE_QUICK_STOP,
     CIA402_STATE_FAULT
-} cia402_state_t;
+} cia402_state;
 
-typedef struct {
-    cia402_state_t state;
-    cia402_mode_t mode;
-    uint16_t controlword;
-    q16_16_t target_position;
-    q16_16_t target_velocity;
-    q16_16_t target_torque;
-    bool halt;
-    bool quick_stop;
-    bool fault_reset_request;
-} cia402_axis_t;
+/** @brief Axis instance for CiA-402 control. */
+typedef struct
+{
+    size_t axis_id;       /**< Logical axis identifier. */
+    cia402_state state;   /**< Current state. */
+    q16_16 target_pos;    /**< Target position. */
+    q16_16 actual_pos;    /**< Actual position. */
+} cia402_axis;
 
-void cia402_axis_init(cia402_axis_t *axis, cia402_mode_t mode);
-void cia402_axis_update(cia402_axis_t *axis, const ethcat_txpdo_t *feedback);
-void cia402_axis_command(cia402_axis_t *axis, const q16_16_t *targets, cia402_mode_t mode);
-void cia402_axis_build_rxpdo(const cia402_axis_t *axis, ethcat_rxpdo_t *rxpdo);
-void cia402_axis_fault_reset(cia402_axis_t *axis);
+/**
+ * @brief Initialise CiA-402 axis.
+ * @param axis Axis instance.
+ * @param axis_id Logical axis identifier.
+ */
+void cia402_axis_init(cia402_axis *axis, size_t axis_id);
+
+/**
+ * @brief Push CSP setpoint to axis.
+ * @param axis Axis instance.
+ * @param target_pos Target position.
+ * @param feedforward Optional feedforward term.
+ */
+void cia402_push_setpoints(cia402_axis *axis, q16_16 target_pos, q16_16 feedforward);
+
+/**
+ * @brief Progress CiA-402 state machine.
+ * @param axis Axis instance.
+ */
+void cia402_step(cia402_axis *axis);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

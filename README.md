@@ -1,84 +1,106 @@
-# STM32F107 Delta Robot CNC Controller
+# Delta CNC Controller for MIPS64
 
-Это bare-metal проект под STM32F107 (72 МГц) для управления дельта-роботом через EtherCAT сервоприводы по профилю CiA-402. Контроллер реализует ядро ЧПУ, планировщик траекторий с look-ahead и S-кривыми, EtherCAT-мастер с синхронизацией DC (Sync0), а также модуль дельта-кинематики. Код организован без RTOS (суперлуп + прерывания Sync0).
+This repository hosts a portable CNC firmware targeting delta parallel robots.
+It supports fixed-point motion planning, EtherCAT CiA-402 drives, OPC UA
+telemetry and a desktop simulator. The codebase is written in ISO C11 and is
+organised for deterministic execution on QNX 7.x, VxWorks 7, OSРВ «Багет», as
+well as host and QEMU-based development environments.
 
-## Структура проекта
+## Features
 
-```
-core/       – состояния ЧПУ, главный цикл, обработка команд
-planner/    – планировщик движений (look-ahead, S-curve)
-kinematics/ – дельта-кинематика, Якобиан и workspace-проверки
-motion/     – выдача сетпойнтов в EtherCAT по режиму CSP/CST/CSV
-ethcat/     – EtherCAT мастер (SOEM-подобный API), DC sync, PDO/SDO
-cia402/     – реализация профиля CiA-402 и state-machine
-gcode/      – парсер G-кода (G0/1/2/3/4/20/21/90/91, M3/4/5/17/18/112)
-drivers/    – STM32F1 ETH MAC/PHY, GPIO, UART (изоляция от HAL)
-board/      – конфигурация платы, клоки, MAC/PHY, delta_cfg_t
-utils/      – fixed-point Q16.16, CORDIC-тригонометрия, матрицы, CRC, таймер
-tests/      – хостовые unit-тесты (x86)
-```
+- 1 kHz real-time motion loop with optional 2 kHz mode
+- Fixed-point Q16.16 kinematics and jerk-limited look-ahead planner with TinyML
+  assisted velocity scaling
+- Spline engine for Bézier, B-spline, quintic and rational cubic (NURBS-lite)
+  trajectories with Shin–McKay additive time-scaling
+- EtherCAT master compatible with SOEM DC/Sync0 and CiA-402 CSP/CST/CSV profiles
+- Calibration subsystem with persistent storage (CRC-protected KV store)
+- OPC UA server backed by an OS abstraction layer with auxiliary-process
+  isolation
+- Host-side graphical simulator featuring 2D/3D trajectory visualisation and a
+  static graphical configurator for planner/robot parameters
+- Desktop IDE that ingests ``.cncp`` projects, runs TinyML-assisted planning and
+  exports OBJ/PPM/JSON artefacts for offline validation
 
-## Сборка
+## Building
 
-### Хостовые unit-тесты
-
-```bash
-cmake -S . -B build -DHOST_TESTS=ON
-cmake --build build --target tests_host
-./build/tests_host
-```
-
-### Прошивка STM32 (arm-none-eabi)
+### Host / Simulator (default)
 
 ```bash
-cmake -S . -B build-stm32 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake
-cmake --build build-stm32 --target firmware_stm32
+cmake -S . -B build -DTARGET_OS=host
+cmake --build build
+ctest --test-dir build
+./build/simulator/delta_simulator
 ```
 
-Полученный ELF (`firmware_stm32.elf`) прошивается через ST-Link Utility / STM32CubeProgrammer.
+### QEMU MIPS64
 
-## EtherCAT
+```bash
+cmake -S . -B build-qemu -DTARGET_OS=qemu -DCMAKE_TOOLCHAIN_FILE=toolchains/qemu-mips64.cmake
+cmake --build build-qemu
+cmake --build build-qemu --target qemu_run
+cmake --build build-qemu --target qemu_smoke_test
+```
 
-* Поддерживаются три привода (оси A/B/C) с верификацией VendorId/ProductCode.
-* Sync0 = 1 кГц (опционально 2 кГц через `board/config.h`).
-* PDO-карта (пример):
-  * **RxPDO** – Controlword (0x6040), Target Position (0x607A), Target Velocity (0x60FF), Target Torque (0x6071), Modes of Operation (0x6060).
-  * **TxPDO** – Statusword (0x6041), Position Actual Value (0x6064), Velocity Actual Value (0x606C), Torque Actual Value (0x6077), Modes of Operation Display (0x6061), EMCY code.
-* При инициализации по CoE задаются лимиты V/A/J (0x6081/0x6083/0x607F), параметры homing и масштаб энкодера.
-* DC синхронизация – выравнивание локального таймера MCU по смещению DC и коррекция дрейфа.
+### QNX / VxWorks / Baget
 
-## CiA-402
+The `toolchains/` directory contains example toolchain files. Select the target
+via the `TARGET_OS` cache entry. For example, building for QNX:
 
-* Полный state-machine: Not Ready → Operation Enabled, обработка Fault/Quick Stop/Fault Reset.
-* Режимы CSP (основной), CST и CSV.
-* Интерфейс `cia402_axis_command()` подаёт сетпойнты и формирует Controlword, статусы читаются через `cia402_axis_update()`.
+```bash
+cmake -S . -B build-qnx -DTARGET_OS=qnx -DCMAKE_TOOLCHAIN_FILE=toolchains/qnx.cmake
+cmake --build build-qnx
+```
 
-## Планировщик
+Refer to the documentation under `docs/` for deployment instructions.
 
-* Очередь на 128 строк G-кода, look-ahead на ≥16 сегментов, сглаживание по углам.
-* S-кривая на каждом тике (1 кГц) с деградацией до трапеций при нехватке буфера.
-* Ограничения V/A/J задаются в `board/config.h`.
+## Documentation
 
-## Консоль и команды
+Documentation is generated with Doxygen and Sphinx. The combined HTML/PDF set
+is produced by the `docs` target, while the raw API reference is available
+through `docs_api`.
 
-UART 115200 бод: приём G-кода, сервисные команды `$H`, `$X`, `$ECAT?`. Ответы в формате `ok`/`error:<код>`.
+```bash
+cmake --build build --target docs
+```
 
-## Самотесты ($SELFTEST)
+Generated files are placed in `build/docs`.
 
-* Круг XY (R = 50 мм) и квадрат 100×100 мм с отчётом по максимальному отклонению.
-* EtherCAT цикл: счётчик пропусков Sync0.
+## Tests and Self-Diagnostics
 
-## Параметры Sync0/DC
+- Unit tests cover kinematics, spline geometry, planner limits and storage
+  integrity.
+- Integration tests exercise the EtherCAT state machine, OPC UA model and the
+  simulated motion loop.
+- `$SELFTEST` demonstrates the canonical acceptance trajectory (homing, circle,
+  square and figure-eight) and records tracking metrics.
 
-Настраиваются в `board/config.h` (период, смещение, список приводов). Flash-память может использоваться для хранения параметров (wear-leveling).
+## Simulator
 
-## Типовой запуск
+The simulator renders the delta robot workspace to 2D and 3D artefacts (PPM and
+OBJ) and produces a JSON configuration snapshot. It uses the production
+kinematics, planner and motion modules, making it suitable for validating
+trajectories without hardware. The configurator output can be reviewed as a
+static UI mock-up while tuning planner and geometry parameters.
 
-1. Сконфигурировать MAC/PHY (RMII) в CubeMX, собрать прошивку.
-2. Поднять EtherCAT сеть, убедиться в `ok` от команды `$ECAT?`.
-3. Перейти в Operation Enabled (`M17`), отправить G1 X/Y/Z F... для движения.
-4. Аварийный стоп (`M112` или аппаратный E-stop) → Quick Stop + disable < 2 мс.
+```bash
+./build/simulator/delta_simulator
+```
 
-## Лицензия
+## IDE
 
-MIT.
+The IDE command line front-end is emitted alongside the simulator binaries when
+building for host or QEMU targets. It converts ``.cncp`` projects into sampled
+trajectories and produces accompanying visual artefacts.
+
+```bash
+./build/ide/cnc_ide tests/data/demo_project.cncp ide_output
+```
+
+The generated directory contains a JSON snapshot of the configuration UI, OBJ
+and PPM trajectory renders plus a text report with timing and limit details.
+
+## Licensing
+
+The project is provided for evaluation purposes. Consult the documentation for
+third-party components such as `open62541` before redistribution.

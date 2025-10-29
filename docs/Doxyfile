@@ -1,0 +1,9 @@
+PROJECT_NAME = "Delta CNC Controller"
+OUTPUT_DIRECTORY = "docs"
+GENERATE_LATEX = YES
+GENERATE_HTML = YES
+RECURSIVE = YES
+INPUT = ../core ../planner ../kinematics ../motion ../ethcat ../cia402 ../calib ../storage ../opcua ../gcode ../drivers ../osal ../utils
+FILE_PATTERNS = *.c *.h
+EXTRACT_ALL = YES
+WARN_IF_UNDOCUMENTED = YES

@@ -1,12 +1,19 @@
+/**
+ * @file board.h
+ * @brief Board-level configuration helpers.
+ */
 #ifndef BOARD_BOARD_H
 #define BOARD_BOARD_H
 
-#include "config.h"
+#include <stdbool.h>
+#include "ethcat/ethcat.h"
 
-void board_clock_init(void);
-void board_gpio_init(void);
-void board_emac_init(void);
-void board_console_init(void);
-void board_load_configuration(void);
+/**
+ * @brief Configure network stack for EtherCAT.
+ *
+ * @param master EtherCAT master.
+ * @return true on success.
+ */
+bool board_configure_network(ethcat_master_t *master);
 
-#endif
+#endif /* BOARD_BOARD_H */

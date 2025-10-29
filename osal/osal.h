@@ -10,10 +10,19 @@
 #include <stdint.h>
 
 typedef void (*osal_thread_fn)(void *arg);
+typedef void (*osal_process_fn)(void *arg);
 
 typedef struct osal_mutex osal_mutex;
 typedef struct osal_event osal_event;
 typedef struct osal_thread osal_thread;
+typedef struct osal_process osal_process;
+
+/** @brief Classification for spawned processes. */
+typedef enum
+{
+    OSAL_PROCESS_CLASS_REALTIME = 0, /**< Dedicated real-time process. */
+    OSAL_PROCESS_CLASS_AUXILIARY     /**< Auxiliary process executing non-critical tasks. */
+} osal_process_class;
 
 /**
  * @brief Initialise OS abstraction layer.
@@ -46,6 +55,27 @@ void osal_thread_join(osal_thread *thread);
  * @param thread Thread handle.
  */
 void osal_thread_destroy(osal_thread *thread);
+
+/**
+ * @brief Spawn isolated process running provided entry point.
+ * @param fn Process entry function.
+ * @param arg User pointer passed to entry.
+ * @param cls Process class specifying scheduling policy.
+ * @return Newly created process handle or NULL on failure.
+ */
+osal_process *osal_process_spawn(osal_process_fn fn, void *arg, osal_process_class cls);
+
+/**
+ * @brief Wait for process completion.
+ * @param process Process handle.
+ */
+void osal_process_wait(osal_process *process);
+
+/**
+ * @brief Destroy process handle resources.
+ * @param process Process handle.
+ */
+void osal_process_destroy(osal_process *process);
 
 /**
  * @brief Allocate mutex.

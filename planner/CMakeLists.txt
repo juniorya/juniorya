@@ -11,4 +11,4 @@ add_library(planner
 
 target_include_directories(planner PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-target_link_libraries(planner PUBLIC utils m)
+target_link_libraries(planner PUBLIC utils ml m)

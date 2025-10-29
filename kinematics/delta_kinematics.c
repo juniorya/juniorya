@@ -19,6 +19,27 @@ static q16_16 fq(float v)
     return q16_from_float(v);
 }
 
+void delta_default_config(delta_cfg_t *cfg)
+{
+    cfg->R_base = fq(250.0f);
+    cfg->r_eff = fq(60.0f);
+    cfg->L_upper = fq(400.0f);
+    cfg->L_lower = fq(800.0f);
+    cfg->z_offset = fq(450.0f);
+    cfg->soft_xyz_min[0] = fq(-200.0f);
+    cfg->soft_xyz_min[1] = fq(-200.0f);
+    cfg->soft_xyz_min[2] = fq(-500.0f);
+    cfg->soft_xyz_max[0] = fq(200.0f);
+    cfg->soft_xyz_max[1] = fq(200.0f);
+    cfg->soft_xyz_max[2] = fq(-100.0f);
+    cfg->calib_offsets[0] = q16_from_int(0);
+    cfg->calib_offsets[1] = q16_from_int(0);
+    cfg->calib_offsets[2] = q16_from_int(0);
+    cfg->scale_per_axis[0] = q16_from_float(1.0f);
+    cfg->scale_per_axis[1] = q16_from_float(1.0f);
+    cfg->scale_per_axis[2] = q16_from_float(1.0f);
+}
+
 static bool solve_single_arm(float x, float y, float z,
                              float base_radius,
                              float eff_radius,

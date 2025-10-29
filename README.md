@@ -9,14 +9,16 @@ well as host and QEMU-based development environments.
 ## Features
 
 - 1 kHz real-time motion loop with optional 2 kHz mode
-- Fixed-point Q16.16 kinematics and jerk-limited look-ahead planner
+- Fixed-point Q16.16 kinematics and jerk-limited look-ahead planner with TinyML
+  assisted velocity scaling
 - Spline engine for Bézier, B-spline, quintic and rational cubic (NURBS-lite)
   trajectories with Shin–McKay additive time-scaling
 - EtherCAT master compatible with SOEM DC/Sync0 and CiA-402 CSP/CST/CSV profiles
 - Calibration subsystem with persistent storage (CRC-protected KV store)
-- OPC UA server backed by an OS abstraction layer
-- Host-side graphical simulator that renders end-effector trajectories and
-  drive states without physical hardware
+- OPC UA server backed by an OS abstraction layer with auxiliary-process
+  isolation
+- Host-side graphical simulator featuring 2D/3D trajectory visualisation and a
+  static graphical configurator for planner/robot parameters
 
 ## Building
 
@@ -26,7 +28,7 @@ well as host and QEMU-based development environments.
 cmake -S . -B build -DTARGET_OS=host
 cmake --build build
 ctest --test-dir build
-./build/simulator/delta_simulator --trajectory data/demo_gcode.ngc
+./build/simulator/delta_simulator
 ```
 
 ### QEMU MIPS64
@@ -35,6 +37,7 @@ ctest --test-dir build
 cmake -S . -B build-qemu -DTARGET_OS=qemu -DCMAKE_TOOLCHAIN_FILE=toolchains/qemu-mips64.cmake
 cmake --build build-qemu
 cmake --build build-qemu --target qemu_run
+cmake --build build-qemu --target qemu_smoke_test
 ```
 
 ### QNX / VxWorks / Baget
@@ -72,12 +75,14 @@ Generated files are placed in `build/docs`.
 
 ## Simulator
 
-The simulator renders the delta robot workspace to a simple image sequence and
-CSV log. It uses the production kinematics, planner and motion modules, making
-it suitable for validating trajectories without hardware.
+The simulator renders the delta robot workspace to 2D and 3D artefacts (PPM and
+OBJ) and produces a JSON configuration snapshot. It uses the production
+kinematics, planner and motion modules, making it suitable for validating
+trajectories without hardware. The configurator output can be reviewed as a
+static UI mock-up while tuning planner and geometry parameters.
 
 ```bash
-./build/simulator/delta_simulator --headless --output ./sim_output
+./build/simulator/delta_simulator
 ```
 
 ## Licensing

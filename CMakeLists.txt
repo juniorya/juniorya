@@ -32,6 +32,7 @@ add_subdirectory(gcode)
 add_subdirectory(drivers)
 add_subdirectory(board)
 add_subdirectory(opcua)
+add_subdirectory(ml)
 add_subdirectory(sim)
 
 set(PROJECT_INCLUDE_DIRS
@@ -49,6 +50,7 @@ set(PROJECT_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/drivers
     ${CMAKE_CURRENT_SOURCE_DIR}/board
     ${CMAKE_CURRENT_SOURCE_DIR}/opcua
+    ${CMAKE_CURRENT_SOURCE_DIR}/ml
 )
 
 add_library(delta_cnc_lib
@@ -73,6 +75,7 @@ target_link_libraries(delta_cnc_lib
         drivers
         board
         opcua
+        ml
 )
 
 target_include_directories(delta_cnc_lib PUBLIC ${PROJECT_INCLUDE_DIRS})
@@ -96,9 +99,10 @@ if(TARGET_OS STREQUAL "qemu")
     )
 
     add_custom_target(qemu_smoke_test
-        COMMAND ${CMAKE_COMMAND} -E sleep 1
-        COMMAND ${CMAKE_COMMAND} -E echo "QEMU smoke test placeholder"
-        DEPENDS qemu_run
+        COMMAND ${CMAKE_COMMAND} -E env TARGET_OS=qemu PROJECT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_qemu_selftest.sh
+        DEPENDS delta_cnc_lib
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Running QEMU MIPS64 integration self-test"
     )
 endif()
 

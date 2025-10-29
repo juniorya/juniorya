@@ -13,6 +13,8 @@ target_link_libraries(tests_host
         calib
         storage
         board
+        ml
+        sim_support
 )
 
 add_test(NAME unit_tests COMMAND tests_host)

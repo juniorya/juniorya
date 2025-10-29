@@ -12,6 +12,7 @@
 #include "planner/lookahead/lookahead.h"
 #include "planner/s_curve/s_curve.h"
 #include "planner/splines/splines.h"
+#include "ml/tinyml_optimizer.h"
 #include "utils/q16.h"
 
 #ifdef __cplusplus
@@ -35,6 +36,9 @@ typedef struct
     s_curve_profile current_motion;/**< Current S-curve profile. */
     spl_plan_t active_spline;      /**< Active spline segment. */
     bool spline_valid;             /**< Whether a spline is active. */
+    tinyml_network optimizer;      /**< Embedded neural optimiser. */
+    bool optimizer_ready;          /**< True when optimiser weights initialised. */
+    q16_16 optimizer_last_scale;   /**< Last velocity multiplier suggested by ML. */
 } planner_context;
 
 /**

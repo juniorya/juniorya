@@ -30,6 +30,12 @@ typedef struct
 } delta_cfg_t;
 
 /**
+ * @brief Populate configuration with conservative defaults.
+ * @param cfg Configuration instance to populate.
+ */
+void delta_default_config(delta_cfg_t *cfg);
+
+/**
  * @brief Compute forward kinematics from joint angles.
  * @param cfg Robot configuration.
  * @param theta Joint angles in radians (Q16.16).

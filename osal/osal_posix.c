@@ -9,7 +9,11 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <sched.h>
+#include <signal.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -28,6 +32,11 @@ struct osal_event
 struct osal_thread
 {
     pthread_t native;
+};
+
+struct osal_process
+{
+    pid_t pid;
 };
 
 bool osal_init(void)
@@ -91,6 +100,56 @@ void osal_thread_destroy(osal_thread *thread)
     if (thread != NULL)
     {
         free(thread);
+    }
+}
+
+static void configure_realtime_policy(osal_process_class cls)
+{
+    if (cls == OSAL_PROCESS_CLASS_REALTIME)
+    {
+        struct sched_param sp;
+        sp.sched_priority = 80;
+        (void)sched_setscheduler(0, SCHED_FIFO, &sp);
+    }
+}
+
+osal_process *osal_process_spawn(osal_process_fn fn, void *arg, osal_process_class cls)
+{
+    osal_process *proc = (osal_process *)malloc(sizeof(osal_process));
+    if (proc == NULL)
+    {
+        return NULL;
+    }
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        free(proc);
+        return NULL;
+    }
+    if (pid == 0)
+    {
+        configure_realtime_policy(cls);
+        fn(arg);
+        _exit(EXIT_SUCCESS);
+    }
+    proc->pid = pid;
+    return proc;
+}
+
+void osal_process_wait(osal_process *process)
+{
+    if (process == NULL)
+    {
+        return;
+    }
+    (void)waitpid(process->pid, NULL, 0);
+}
+
+void osal_process_destroy(osal_process *process)
+{
+    if (process != NULL)
+    {
+        free(process);
     }
 }
 

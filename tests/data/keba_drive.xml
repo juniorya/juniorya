@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EtherCATInfo>
+  <Descriptions>
+    <Devices>
+      <Device>
+        <Name>KEBA Servo Drive</Name>
+        <VendorId>0x0000066F</VendorId>
+        <ProductCode>0x12345678</ProductCode>
+        <RevisionNo>0x01</RevisionNo>
+      </Device>
+    </Devices>
+  </Descriptions>
+</EtherCATInfo>

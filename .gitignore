@@ -1,0 +1,12 @@
+# Build outputs
+build/
+config.mk
+config.status
+*.o
+*.a
+*.ppm
+*.csv
+*.obj
+*.json
+
+*.bin

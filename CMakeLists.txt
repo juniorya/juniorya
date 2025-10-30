@@ -1,71 +1,113 @@
-cmake_minimum_required(VERSION 3.16)
-project(delta_controller C)
+cmake_minimum_required(VERSION 3.20)
+project(delta_cnc C)
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-add_compile_options(-Wall -Wextra -Werror)
+option(ENABLE_G5 "Enable G5/G5.2 spline commands" ON)
+option(ENABLE_OPCUA "Enable OPC UA server" ON)
+option(BUILD_DOCS "Build documentation" ON)
 
-set(COMMON_SOURCES
-    utils/fixed.c
-    utils/trig.c
-    utils/matrix.c
-    utils/crc16.c
-    utils/timer.c
-    utils/filter.c
-    kinematics/delta.c
-    planner/planner.c
-    motion/motion_control.c
-    ethcat/master.c
-    cia402/cia402.c
-    gcode/parser.c
-    core/cnc_state.c
-    core/command_processor.c
-    drivers/eth_mac.c
-    drivers/gpio.c
-    drivers/uart.c
-    board/board.c
+set(TARGET_OS "host" CACHE STRING "Target operating system")
+set_property(CACHE TARGET_OS PROPERTY STRINGS host qnx vxworks baget qemu)
+
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+endif()
+
+include(cmake/os_detection.cmake)
+
+add_subdirectory(utils)
+add_subdirectory(osal)
+add_subdirectory(core)
+add_subdirectory(planner)
+add_subdirectory(kinematics)
+add_subdirectory(motion)
+add_subdirectory(ethcat)
+add_subdirectory(cia402)
+add_subdirectory(calib)
+add_subdirectory(storage)
+add_subdirectory(gcode)
+add_subdirectory(drivers)
+add_subdirectory(board)
+add_subdirectory(opcua)
+add_subdirectory(ml)
+add_subdirectory(sim)
+add_subdirectory(ide)
+add_subdirectory(vision)
+
+set(PROJECT_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/osal
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/planner
+    ${CMAKE_CURRENT_SOURCE_DIR}/kinematics
+    ${CMAKE_CURRENT_SOURCE_DIR}/motion
+    ${CMAKE_CURRENT_SOURCE_DIR}/ethcat
+    ${CMAKE_CURRENT_SOURCE_DIR}/cia402
+    ${CMAKE_CURRENT_SOURCE_DIR}/calib
+    ${CMAKE_CURRENT_SOURCE_DIR}/storage
+    ${CMAKE_CURRENT_SOURCE_DIR}/gcode
+    ${CMAKE_CURRENT_SOURCE_DIR}/drivers
+    ${CMAKE_CURRENT_SOURCE_DIR}/board
+    ${CMAKE_CURRENT_SOURCE_DIR}/opcua
+    ${CMAKE_CURRENT_SOURCE_DIR}/ml
+    ${CMAKE_CURRENT_SOURCE_DIR}/ide
+    ${CMAKE_CURRENT_SOURCE_DIR}/vision
 )
 
-add_executable(firmware_stm32
-    core/main.c
-    ${COMMON_SOURCES}
+add_library(delta_cnc_lib
+    main.c
 )
 
-target_include_directories(firmware_stm32 PRIVATE
-    .
-    board
-    utils
-    kinematics
-    planner
-    motion
-    ethcat
-    cia402
-    gcode
-    core
-    drivers
-)
+set_target_properties(delta_cnc_lib PROPERTIES OUTPUT_NAME cnc_firmware)
 
-target_link_libraries(firmware_stm32 m)
-
-option(HOST_TESTS "Build host tests" OFF)
-if (HOST_TESTS)
-    add_executable(tests_host
-        tests/test_host.c
-        ${COMMON_SOURCES}
-    )
-    target_include_directories(tests_host PRIVATE
-        .
-        board
+target_link_libraries(delta_cnc_lib
+    PUBLIC
         utils
-        kinematics
+        osal
+        core
         planner
+        kinematics
         motion
         ethcat
         cia402
+        calib
+        storage
         gcode
-        core
         drivers
-    )
-    target_link_libraries(tests_host m)
+        board
+        opcua
+        ml
+        vision
+)
+
+target_include_directories(delta_cnc_lib PUBLIC ${PROJECT_INCLUDE_DIRS})
+
+if(TARGET_OS STREQUAL "host" OR TARGET_OS STREQUAL "qemu")
+    enable_testing()
+    add_subdirectory(tests)
 endif()
+
+add_subdirectory(docs)
+
+if(TARGET_OS STREQUAL "qemu")
+    add_custom_target(qemu_run
+        COMMAND ${CMAKE_COMMAND} -E env QEMU_AUDIO_DRV=none
+                qemu-system-mips64el -M malta -cpu mips64r2-generic -m 256M
+                -kernel $<TARGET_FILE:delta_cnc_lib>
+                -nographic -serial mon:stdio -monitor none
+        DEPENDS delta_cnc_lib
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Booting firmware under QEMU MIPS64"
+    )
+
+    add_custom_target(qemu_smoke_test
+        COMMAND ${CMAKE_COMMAND} -E env TARGET_OS=qemu PROJECT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_qemu_selftest.sh
+        DEPENDS delta_cnc_lib
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Running QEMU MIPS64 integration self-test"
+    )
+endif()
+

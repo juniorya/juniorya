@@ -1,0 +1,14 @@
+PROJECT_NAME = "Delta CNC"
+OUTPUT_DIRECTORY = $(DOXYGEN_OUTPUT_DIR)
+GENERATE_HTML = YES
+GENERATE_LATEX = YES
+INPUT = ../core ../planner ../kinematics ../motion ../ethcat ../cia402 ../calib ../storage ../gcode ../drivers ../board ../utils ../opcua
+FILE_PATTERNS = *.h *.c
+EXTRACT_ALL = YES
+EXTRACT_PRIVATE = YES
+WARN_IF_UNDOCUMENTED = YES
+QUIET = NO
+JAVADOC_AUTOBRIEF = YES
+MACRO_EXPANSION = YES
+EXPAND_ONLY_PREDEF = NO
+PREDEFINED = __attribute__(x)=

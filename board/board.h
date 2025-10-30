@@ -1,12 +1,25 @@
-#ifndef BOARD_BOARD_H
-#define BOARD_BOARD_H
+/**
+ * @file board.h
+ * @brief Board-level configuration parameters.
+ */
 
-#include "config.h"
+#ifndef BOARD_H
+#define BOARD_H
 
-void board_clock_init(void);
-void board_gpio_init(void);
-void board_emac_init(void);
-void board_console_init(void);
-void board_load_configuration(void);
+#include "kinematics/delta_kinematics.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Obtain default delta robot configuration.
+ * @param cfg Configuration structure.
+ */
+void board_default_delta_config(delta_cfg_t *cfg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,84 +1,63 @@
-# STM32F107 Delta Robot CNC Controller
+# Delta CNC Platform
 
-Это bare-metal проект под STM32F107 (72 МГц) для управления дельта-роботом через EtherCAT сервоприводы по профилю CiA-402. Контроллер реализует ядро ЧПУ, планировщик траекторий с look-ahead и S-кривыми, EtherCAT-мастер с синхронизацией DC (Sync0), а также модуль дельта-кинематики. Код организован без RTOS (суперлуп + прерывания Sync0).
+Delta CNC Platform is a portable firmware stack for Komdiv-64 based delta
+robots. The project is written in ISO C11, targets an 8 kHz real-time loop, and
+runs on Baget RTOS, QEMU Komdiv-64, and standard Linux hosts for simulation.
 
-## Структура проекта
+## Features
 
-```
-core/       – состояния ЧПУ, главный цикл, обработка команд
-planner/    – планировщик движений (look-ahead, S-curve)
-kinematics/ – дельта-кинематика, Якобиан и workspace-проверки
-motion/     – выдача сетпойнтов в EtherCAT по режиму CSP/CST/CSV
-ethcat/     – EtherCAT мастер (SOEM-подобный API), DC sync, PDO/SDO
-cia402/     – реализация профиля CiA-402 и state-machine
-gcode/      – парсер G-кода (G0/1/2/3/4/20/21/90/91, M3/4/5/17/18/112)
-drivers/    – STM32F1 ETH MAC/PHY, GPIO, UART (изоляция от HAL)
-board/      – конфигурация платы, клоки, MAC/PHY, delta_cfg_t
-utils/      – fixed-point Q16.16, CORDIC-тригонометрия, матрицы, CRC, таймер
-tests/      – хостовые unit-тесты (x86)
-```
+- OS abstraction layer with 125 µs periodic timers and affinity control.
+- EtherCAT master with CiA-402 CSP support and configurable Sync0 frequency.
+- Jerk-limited planner with spline support (Bezier3, B-spline3, quintic, and
+  NURBS-lite).
+- Delta kinematics in Q16.16 fixed-point arithmetic with Jacobian monitoring.
+- Calibration sequences ($CAL family) and reliable storage with CRC protection.
+- OPC UA server exposing machine state and OPC UA ↔ DDS bridge for telemetry.
+- Lightweight DDS middleware with CDR serialisation and QoS management.
+- Comprehensive documentation generated with Doxygen and Sphinx.
 
-## Сборка
-
-### Хостовые unit-тесты
+## Building
 
 ```bash
-cmake -S . -B build -DHOST_TESTS=ON
-cmake --build build --target tests_host
-./build/tests_host
+cmake -S . -B build -DTARGET_OS=pc-linux -DSYNC0_RATE_HZ=8000
+cmake --build build
+ctest --test-dir build
 ```
 
-### Прошивка STM32 (arm-none-eabi)
+Enable optional components:
 
 ```bash
-cmake -S . -B build-stm32 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-arm-none-eabi.cmake
-cmake --build build-stm32 --target firmware_stm32
+cmake -S . -B build -DENABLE_G5=ON -DENABLE_OPCUA=ON -DENABLE_DDS=ON
 ```
 
-Полученный ELF (`firmware_stm32.elf`) прошивается через ST-Link Utility / STM32CubeProgrammer.
+Generate documentation:
 
-## EtherCAT
+```bash
+cmake --build build --target docs_api
+cmake --build build --target docs
+```
 
-* Поддерживаются три привода (оси A/B/C) с верификацией VendorId/ProductCode.
-* Sync0 = 1 кГц (опционально 2 кГц через `board/config.h`).
-* PDO-карта (пример):
-  * **RxPDO** – Controlword (0x6040), Target Position (0x607A), Target Velocity (0x60FF), Target Torque (0x6071), Modes of Operation (0x6060).
-  * **TxPDO** – Statusword (0x6041), Position Actual Value (0x6064), Velocity Actual Value (0x606C), Torque Actual Value (0x6077), Modes of Operation Display (0x6061), EMCY code.
-* При инициализации по CoE задаются лимиты V/A/J (0x6081/0x6083/0x607F), параметры homing и масштаб энкодера.
-* DC синхронизация – выравнивание локального таймера MCU по смещению DC и коррекция дрейфа.
+## QEMU Komdiv-64
 
-## CiA-402
+```
+cmake -S . -B build-qemu -DTARGET_OS=qemu-mips64 -DSYNC0_RATE_HZ=8000
+cmake --build build-qemu
+```
 
-* Полный state-machine: Not Ready → Operation Enabled, обработка Fault/Quick Stop/Fault Reset.
-* Режимы CSP (основной), CST и CSV.
-* Интерфейс `cia402_axis_command()` подаёт сетпойнты и формирует Controlword, статусы читаются через `cia402_axis_update()`.
+Run the emulator with the produced binary and the provided scripts inside
+``/tools``.
 
-## Планировщик
+## Baget Deployment
 
-* Очередь на 128 строк G-кода, look-ahead на ≥16 сегментов, сглаживание по углам.
-* S-кривая на каждом тике (1 кГц) с деградацией до трапеций при нехватке буфера.
-* Ограничения V/A/J задаются в `board/config.h`.
+```
+cmake -S . -B build-baget -DTARGET_OS=baget-komdiv64 -DCMAKE_TOOLCHAIN_FILE=toolchains/baget-komdiv64.cmake
+cmake --build build-baget
+```
 
-## Консоль и команды
+Copy ``cnc_firmware`` to the Baget target and provide EtherCAT XML and DDS
+profile files in the controller configuration directory.
 
-UART 115200 бод: приём G-кода, сервисные команды `$H`, `$X`, `$ECAT?`. Ответы в формате `ok`/`error:<код>`.
+## Self-test
 
-## Самотесты ($SELFTEST)
-
-* Круг XY (R = 50 мм) и квадрат 100×100 мм с отчётом по максимальному отклонению.
-* EtherCAT цикл: счётчик пропусков Sync0.
-
-## Параметры Sync0/DC
-
-Настраиваются в `board/config.h` (период, смещение, список приводов). Flash-память может использоваться для хранения параметров (wear-leveling).
-
-## Типовой запуск
-
-1. Сконфигурировать MAC/PHY (RMII) в CubeMX, собрать прошивку.
-2. Поднять EtherCAT сеть, убедиться в `ok` от команды `$ECAT?`.
-3. Перейти в Operation Enabled (`M17`), отправить G1 X/Y/Z F... для движения.
-4. Аварийный стоп (`M112` или аппаратный E-stop) → Quick Stop + disable < 2 мс.
-
-## Лицензия
-
-MIT.
+Execute ``$SELFTEST`` via the console interface to run a circle, a square, and a
+spline lemniscate. The results are published through OPC UA and DDS telemetry.

@@ -1,88 +1,81 @@
-#include "cia402.h"
+#include "cia402/cia402.h"
 
-static cia402_state_t cia402_decode_state(uint16_t statusword)
-{
-    uint16_t masked = statusword & 0x006FU;
-    if ((statusword & 0x004FU) == 0x0000U) {
-        return CIA402_STATE_NOT_READY;
-    }
-    if ((masked & 0x004FU) == 0x0040U) {
-        return CIA402_STATE_SWITCH_ON_DISABLED;
-    }
-    if ((masked & 0x006FU) == 0x0021U) {
-        return CIA402_STATE_READY_TO_SWITCH_ON;
-    }
-    if ((masked & 0x006FU) == 0x0023U) {
-        return CIA402_STATE_SWITCHED_ON;
-    }
-    if ((masked & 0x006FU) == 0x0027U) {
-        return CIA402_STATE_OPERATION_ENABLED;
-    }
-    if ((masked & 0x006FU) == 0x002BU) {
-        return CIA402_STATE_QUICK_STOP_ACTIVE;
-    }
-    if ((statusword & 0x004FU) == 0x000FU) {
-        return CIA402_STATE_FAULT;
-    }
-    if ((statusword & 0x004FU) == 0x0007U) {
-        return CIA402_STATE_FAULT_REACTION;
-    }
-    return CIA402_STATE_SWITCH_ON_DISABLED;
-}
+#include <stddef.h>
 
-void cia402_axis_init(cia402_axis_t *axis, cia402_mode_t mode)
+void cia402_axis_init(cia402_axis *axis)
 {
-    axis->state = CIA402_STATE_NOT_READY;
-    axis->mode = mode;
-    axis->controlword = 0U;
-    axis->target_position = 0;
-    axis->target_velocity = 0;
-    axis->target_torque = 0;
-    axis->halt = false;
+    if (axis == NULL)
+    {
+        return;
+    }
+    axis->state = CIA402_SWITCH_ON_DISABLED;
+    axis->target = 0;
+    axis->actual = 0;
     axis->quick_stop = false;
-    axis->fault_reset_request = false;
 }
 
-void cia402_axis_update(cia402_axis_t *axis, const ethcat_txpdo_t *feedback)
+void cia402_set_fault(cia402_axis *axis, bool fault)
 {
-    axis->state = cia402_decode_state(feedback->statusword);
-    if (axis->state == CIA402_STATE_FAULT && axis->fault_reset_request) {
-        axis->fault_reset_request = false;
+    if (axis == NULL)
+    {
+        return;
+    }
+    axis->state = fault ? CIA402_FAULT : CIA402_SWITCH_ON_DISABLED;
+}
+
+void cia402_set_quick_stop(cia402_axis *axis, bool enable)
+{
+    if (axis != NULL)
+    {
+        axis->quick_stop = enable;
     }
 }
 
-void cia402_axis_command(cia402_axis_t *axis, const q16_16_t *targets, cia402_mode_t mode)
+void cia402_enable_operation(cia402_axis *axis)
 {
-    axis->mode = mode;
-    axis->target_position = targets[0];
-    axis->target_velocity = targets[1];
-    axis->target_torque = targets[2];
+    if (axis == NULL)
+    {
+        return;
+    }
+    if (axis->state == CIA402_SWITCHED_ON)
+    {
+        axis->state = CIA402_OPERATION_ENABLED;
+    }
+    else if (axis->state == CIA402_READY_TO_SWITCH_ON)
+    {
+        axis->state = CIA402_SWITCHED_ON;
+    }
 }
 
-void cia402_axis_build_rxpdo(const cia402_axis_t *axis, ethcat_rxpdo_t *rxpdo)
+bool cia402_push_setpoint(cia402_axis *axis, q16_16 target_pos, q16_16 feedforward)
 {
-    uint16_t cw = 0U;
-    cw |= 0x0006U; /* enable voltage + quick stop */
-    if (!axis->quick_stop) {
-        cw |= 0x0001U; /* switch on */
+    (void)feedforward;
+    if ((axis == NULL) || (axis->state != CIA402_OPERATION_ENABLED) || axis->quick_stop)
+    {
+        return false;
     }
-    if (!axis->halt && !axis->quick_stop) {
-        cw |= 0x0008U; /* enable operation */
-    }
-    if (axis->halt) {
-        cw |= 0x0100U;
-    }
-    if (axis->fault_reset_request) {
-        cw |= 0x0080U;
-    }
-    rxpdo->controlword = cw;
-    rxpdo->mode_of_operation = (uint8_t)axis->mode;
-    rxpdo->target_position = axis->target_position;
-    rxpdo->target_velocity = axis->target_velocity;
-    rxpdo->target_torque = axis->target_torque;
+    axis->target = target_pos;
+    return true;
 }
 
-void cia402_axis_fault_reset(cia402_axis_t *axis)
+void cia402_tick(cia402_axis *axis)
 {
-    axis->fault_reset_request = true;
+    if (axis == NULL)
+    {
+        return;
+    }
+    switch (axis->state)
+    {
+        case CIA402_SWITCH_ON_DISABLED:
+            axis->state = CIA402_READY_TO_SWITCH_ON;
+            break;
+        case CIA402_READY_TO_SWITCH_ON:
+            axis->state = CIA402_SWITCHED_ON;
+            break;
+        case CIA402_OPERATION_ENABLED:
+            axis->actual = axis->target;
+            break;
+        default:
+            break;
+    }
 }

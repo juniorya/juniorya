@@ -1,37 +1,37 @@
 #ifndef KINEMATICS_DELTA_H
 #define KINEMATICS_DELTA_H
 
-#include "utils/fixed.h"
-#include "utils/matrix.h"
+#include <stdbool.h>
 
-typedef struct {
-    q16_16_t R_base;
-    q16_16_t r_eff;
-    q16_16_t L_upper;
-    q16_16_t L_lower;
-    q16_16_t z_offset;
-    q16_16_t soft_xyz_min[3];
-    q16_16_t soft_xyz_max[3];
+#include "utils/vec3.h"
+
+/** \brief Delta robot configuration. */
+typedef struct
+{
+    q16_16 R_base;             /**< Base radius. */
+    q16_16 r_eff;              /**< End effector radius. */
+    q16_16 L_upper;            /**< Upper arm length. */
+    q16_16 L_lower;            /**< Lower arm length. */
+    q16_16 z_offset;           /**< Mechanical zero offset. */
+    q16_16 soft_xyz_min[3];    /**< Soft minimum workspace. */
+    q16_16 soft_xyz_max[3];    /**< Soft maximum workspace. */
+    q16_16 calib_offsets[3];   /**< Encoder offsets. */
+    q16_16 scale_per_axis[3];  /**< Axis scaling factors. */
 } delta_cfg_t;
 
-typedef struct {
-    q16_16_t theta[3];
-} delta_joint_t;
+/** \brief Initialise configuration with defaults. */
+void delta_default_config(delta_cfg_t *cfg);
 
-typedef struct {
-    q16_16_t xyz[3];
-} delta_pose_t;
+/** \brief Inverse kinematics for the delta robot. */
+bool delta_inverse(const delta_cfg_t *cfg, vec3_q16 xyz, q16_16 joints[3]);
 
-typedef struct {
-    mat3x3_q16_16_t jacobian;
-    q16_16_t det;
-    bool singular;
-} delta_jacobian_t;
+/** \brief Forward kinematics for the delta robot. */
+bool delta_forward(const delta_cfg_t *cfg, const q16_16 joints[3], vec3_q16 *xyz);
 
-void delta_init(const delta_cfg_t *cfg);
-bool delta_inverse_kinematics(const delta_pose_t *cart, delta_joint_t *joints);
-bool delta_forward_kinematics(const delta_joint_t *joints, delta_pose_t *cart);
-void delta_compute_jacobian(const delta_joint_t *joints, delta_jacobian_t *out);
-bool delta_within_workspace(const delta_pose_t *cart);
+/** \brief Jacobian determinant heuristic for singularity detection. */
+q16_16 delta_jacobian_det(const delta_cfg_t *cfg, const q16_16 joints[3]);
+
+/** \brief Validate workspace boundaries. */
+bool delta_is_within_workspace(const delta_cfg_t *cfg, vec3_q16 xyz);
 
 #endif

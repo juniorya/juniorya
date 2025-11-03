@@ -1,0 +1,26 @@
+PROJECT_NAME           = "Delta CNC Platform"
+OUTPUT_DIRECTORY       = ${DOXYGEN_OUTPUT_DIRECTORY}
+INPUT                  = ${CMAKE_SOURCE_DIR}/calib \
+                          ${CMAKE_SOURCE_DIR}/cia402 \
+                          ${CMAKE_SOURCE_DIR}/core \
+                          ${CMAKE_SOURCE_DIR}/dds \
+                          ${CMAKE_SOURCE_DIR}/drivers \
+                          ${CMAKE_SOURCE_DIR}/ethcat \
+                          ${CMAKE_SOURCE_DIR}/gcode \
+                          ${CMAKE_SOURCE_DIR}/kinematics \
+                          ${CMAKE_SOURCE_DIR}/motion \
+                          ${CMAKE_SOURCE_DIR}/opcua \
+                          ${CMAKE_SOURCE_DIR}/osal \
+                          ${CMAKE_SOURCE_DIR}/planner \
+                          ${CMAKE_SOURCE_DIR}/storage \
+                          ${CMAKE_SOURCE_DIR}/utils
+FILE_PATTERNS          = *.c *.h
+GENERATE_LATEX         = YES
+GENERATE_HTML          = YES
+QUIET                  = NO
+WARN_IF_UNDOCUMENTED   = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+INLINE_SIMPLE_STRUCTS  = YES
+FULL_PATH_NAMES        = NO
+JAVADOC_AUTOBRIEF      = YES

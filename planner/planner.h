@@ -1,38 +1,44 @@
-#ifndef PLANNER_PLANNER_H
-#define PLANNER_PLANNER_H
+#ifndef PLANNER_H
+#define PLANNER_H
 
 #include <stdbool.h>
-#include <stdint.h>
-#include "kinematics/delta.h"
-#include "utils/fixed.h"
+#include <stddef.h>
 
-#define PLANNER_QUEUE_LENGTH 128
+#include "planner/lookahead/lookahead.h"
+#include "planner/s_curve/s_curve.h"
+#include "planner/splines/splines.h"
 
-typedef struct {
-    delta_pose_t start;
-    delta_pose_t end;
-    q16_16_t feedrate;
-    q16_16_t entry_velocity;
-    q16_16_t exit_velocity;
-    q16_16_t accel;
-    q16_16_t jerk;
-    uint32_t total_ticks;
-    uint32_t tick_index;
-    bool active;
-} planner_block_t;
+/** \brief Planner configuration. */
+typedef struct
+{
+    q16_16 max_velocity; /**< Maximum axis velocity. */
+    q16_16 max_accel;    /**< Maximum axis acceleration. */
+    q16_16 max_jerk;     /**< Maximum jerk. */
+    q16_16 period_ms;    /**< Sampling period in milliseconds. */
+} planner_config;
 
-typedef struct {
-    planner_block_t blocks[PLANNER_QUEUE_LENGTH];
-    uint16_t head;
-    uint16_t tail;
-    delta_pose_t current_pose;
-    uint32_t control_period_us;
-} planner_queue_t;
+/** \brief Planner context. */
+typedef struct
+{
+    planner_config config;          /**< Active configuration. */
+    vec3_q16 current_position;      /**< Current machine position. */
+    time_scaled_traj_t segments[16];/**< Segment queue. */
+    size_t head;                    /**< Queue head. */
+    size_t tail;                    /**< Queue tail. */
+    size_t index;                   /**< Active sample index. */
+    bool active;                    /**< Whether a segment is active. */
+} planner_context;
 
-void planner_init(planner_queue_t *planner, uint32_t control_period_us);
-bool planner_is_empty(const planner_queue_t *planner);
-bool planner_push_line(planner_queue_t *planner, const delta_pose_t *target, q16_16_t feedrate, q16_16_t accel, q16_16_t jerk);
-bool planner_step(planner_queue_t *planner, delta_pose_t *pose_out);
-void planner_hold(planner_queue_t *planner);
+void planner_default_config(planner_config *cfg);
+
+bool planner_init(planner_context *ctx, const planner_config *cfg);
+
+void planner_shutdown(planner_context *ctx);
+
+bool planner_queue_cartesian(planner_context *ctx, vec3_q16 target, q16_16 feed);
+
+bool planner_queue_spline(planner_context *ctx, const spl_plan_t *plan);
+
+bool planner_next_sample(planner_context *ctx, vec3_q16 *out_position, vec3_q16 *out_velocity);
 
 #endif
